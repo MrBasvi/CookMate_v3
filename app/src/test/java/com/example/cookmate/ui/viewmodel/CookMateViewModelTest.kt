@@ -6,11 +6,14 @@ import com.example.cookmate.data.model.Meal
 import com.example.cookmate.data.repository.MealRepository
 import com.example.cookmate.data.service.FavouriteMealService
 import com.example.cookmate.ui.state.MealUiState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -22,11 +25,12 @@ import org.junit.Rule
 import org.junit.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
-import org.mockito.kotlin.any
-import org.mockito.kotlin.never
+import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import kotlin.test.assertIs
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CookMateViewModelTest {
@@ -70,20 +74,14 @@ class CookMateViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
     }
-    
-    /**
-     * Юнит-тест 1: Корректное начальное состояние экрана
-     */
+
     @Test
     fun testInitialState() {
         assertTrue(viewModel.uiState.mealListState is MealUiState.Empty)
         assertEquals("", viewModel.uiState.searchQuery)
         assertEquals(0, viewModel.uiState.allMeals.size)
     }
-    
-    /**
-     * Юнит-тест 2: Успешная загрузка данных
-     */
+
     @Test
     fun testSearchMeals_Success() = runTest {
         whenever(mealRepository.searchMealsByName("test")).thenReturn(listOf(testMeal))
@@ -95,10 +93,7 @@ class CookMateViewModelTest {
         val successState = viewModel.uiState.mealListState as MealUiState.Success
         assertEquals(1, successState.meals.size)
     }
-    
-    /**
-     * Юнит-тест 3: Ошибка загрузки
-     */
+
     @Test
     fun testSearchMeals_Error() = runTest {
         whenever(mealRepository.searchMealsByName("test"))
@@ -109,10 +104,7 @@ class CookMateViewModelTest {
         
         assertTrue(viewModel.uiState.mealListState is MealUiState.Error)
     }
-    
-    /**
-     * Юнит-тест 4: Retry после ошибки
-     */
+
     @Test
     fun testRetryAfterError() = runTest {
         whenever(mealRepository.searchMealsByName("test"))
@@ -125,12 +117,11 @@ class CookMateViewModelTest {
         
         viewModel.searchMeals("test")
         advanceUntilIdle()
+
+        verify(mealRepository, times(2)).searchMealsByName("test")
         assertTrue(viewModel.uiState.mealListState is MealUiState.Success)
     }
-    
-    /**
-     * Юнит-тест 5: Корректная обработка пустого результата
-     */
+
     @Test
     fun testSearchMeals_EmptyResult() = runTest {
         whenever(mealRepository.searchMealsByName("xyz")).thenReturn(emptyList())
@@ -141,9 +132,6 @@ class CookMateViewModelTest {
         assertTrue(viewModel.uiState.mealListState is MealUiState.Empty)
     }
 
-    /**
-     * Юнит-тест 6: Отсутствие дублей в кэше/allMeals (бизнес-логика)
-     */
     @Test
     fun testAllMeals_NoDuplicates() = runTest {
         whenever(mealRepository.searchMealsByName("test")).thenReturn(listOf(testMeal))
@@ -156,9 +144,6 @@ class CookMateViewModelTest {
         assertEquals(1, viewModel.uiState.allMeals.size)
     }
 
-    /**
-     * Нетривиальный тест 1: retry() действительно инициирует новую попытку запроса
-     */
     @Test
     fun testRetryActuallyInitiatesNewRequest() = runTest {
         whenever(mealRepository.searchMealsByName("test")).thenReturn(listOf(testMeal))
@@ -171,27 +156,31 @@ class CookMateViewModelTest {
         verify(mealRepository, times(2)).searchMealsByName("test")
     }
 
-    /**
-     * Нетривиальный тест 2 / Потоковое поведение: отмена устаревшего запроса
-     */
     @Test
     fun testCancelOldRequest() = runTest {
-        whenever(mealRepository.searchMealsByName(any())).thenReturn(listOf(testMeal))
+        val slowMeal = testMeal.copy(idMeal = "1", strMeal = "Slow Meal")
+        val fastMeal = testMeal.copy(idMeal = "2", strMeal = "Fast Meal")
 
-        // Запускаем два поиска подряд
+        doAnswer {
+            runBlocking {
+                delay(200)
+                listOf(slowMeal)
+            }
+        }.whenever(mealRepository).searchMealsByName(eq("slow"))
+        whenever(mealRepository.searchMealsByName("fast")).thenReturn(listOf(fastMeal))
+
         viewModel.searchMeals("slow")
+        advanceTimeBy(50)
         viewModel.searchMeals("fast")
-        
         advanceUntilIdle()
 
-        // Проверяем, что первый запрос был отменен до того, как вызвал репозиторий
-        verify(mealRepository, never()).searchMealsByName("slow")
-        verify(mealRepository).searchMealsByName("fast")
+        val state = viewModel.uiState.mealListState
+        assertIs<MealUiState.Success>(state)
+        assertEquals("2", state.meals.first().idMeal)
+        verify(mealRepository, times(1)).searchMealsByName("slow")
+        verify(mealRepository, times(1)).searchMealsByName("fast")
     }
-    
-    /**
-     * Тест на последовательность эмиссий (Требование 5)
-     */
+
     @Test
     fun testFavoritesEmissionSequence() = runTest {
         val m1 = testMeal.copy(idMeal = "1")

@@ -70,18 +70,15 @@ fun DetailScreen(
                     modifier = Modifier.padding(end = 8.dp)
                 )
                 Text("Назад")
-            }            
-            if (uiState.selectedMealId != null) {
-                IconButton(onClick = {
-                    viewModel.toggleFavorite(uiState.selectedMealId!!)
-                }) {
-                    Icon(
-                        imageVector = if (uiState.selectedMealId in uiState.favorites) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Добавить в избранное",
-                        tint = if (uiState.selectedMealId in uiState.favorites) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }        }
+            }
+            IconButton(onClick = { viewModel.toggleFavorite(mealId) }) {
+                Icon(
+                    imageVector = if (mealId in uiState.favorites) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Добавить в избранное",
+                    tint = if (mealId in uiState.favorites) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
 
         when (val detailState = uiState.mealDetailState) {
             is MealDetailUiState.Loading -> {

@@ -10,10 +10,6 @@ import dagger.hilt.components.SingletonComponent
 import dagger.hilt.testing.TestInstallIn
 import javax.inject.Singleton
 
-/**
- * TestDatabaseModule - заменяет настоящую DatabaseModule в тестах
- * Используется in-memory БД вместо файловой
- */
 @Module
 @TestInstallIn(
     components = [SingletonComponent::class],

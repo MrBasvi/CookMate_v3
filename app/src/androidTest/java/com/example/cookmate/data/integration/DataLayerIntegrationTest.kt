@@ -41,10 +41,6 @@ class DataLayerIntegrationTest {
         database.close()
     }
 
-    /**
-     * Интеграционный тест: DAO + Room (БЕЗ Service, чтобы избежать загрузки изображений)
-     * Проверяем: сохранение Entity -> запись в Room -> чтение и конвертация обратно
-     */
     @Test
     fun testAddMealToFavouritesAndObserve() = runTest(testDispatcher) {
         val testEntity = FavouriteMealEntity(
@@ -60,17 +56,14 @@ class DataLayerIntegrationTest {
 
         val dao = database.favouriteMealDao()
 
-        // Act: Добавляем Entity напрямую в DAO (без загрузки изображений через Service)
         withContext(Dispatchers.IO) {
             dao.addFavourite(testEntity)
         }
-        
-        // Observe
+
         val favourites = withContext(Dispatchers.IO) {
             dao.getAllFavourites().first()
         }
 
-        // Assert
         assertEquals(1, favourites.size)
         val result = favourites[0]
         assertEquals(testEntity.idMeal, result.idMeal)
@@ -79,9 +72,6 @@ class DataLayerIntegrationTest {
         assertEquals("Chicken", result.ingredients[0].name)
     }
 
-    /**
-     * Нетривиальный тест: Проверка, что при удалении из БД данные в Flow обновляются
-     */
     @Test
     fun testFlowUpdatesOnDeletion() = runTest(testDispatcher) {
         val dao = database.favouriteMealDao()

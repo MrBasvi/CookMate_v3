@@ -41,14 +41,9 @@ class RoomIntegrationTest {
     fun tearDown() {
         database.close()
     }
-    
-    /**
-     * Интеграционный тест 1: Сохранение и чтение из Room
-     * Данные должны корректно сохраняться и читаться из БД
-     */
+
     @Test
     fun testSaveAndRetrieveFavouriteMeal() = runBlocking {
-        // Arrange
         val ingredients = listOf(
             Ingredient("Pasta", "400g"),
             Ingredient("Eggs", "3")
@@ -63,26 +58,19 @@ class RoomIntegrationTest {
             ingredients = ingredients,
             addedAt = System.currentTimeMillis()
         )
-        
-        // Act
+
         dao.insertFavourite(entity)
         val retrieved = dao.getFavouriteById("1")
-        
-        // Assert
+
         assertNotNull(retrieved)
         assertEquals("1", retrieved!!.idMeal)
         assertEquals("Carbonara", retrieved.strMeal)
         assertEquals(2, retrieved.ingredients.size)
         assertEquals("Pasta", retrieved.ingredients[0].name)
     }
-    
-    /**
-     * Интеграционный тест 2: Отсутствие дубликатов в избранном
-     * При повторном сохранении того же рецепта не должно быть дубликатов
-     */
+
     @Test
     fun testNoDuplicatesInFavourites() = runBlocking {
-        // Arrange
         val entity = FavouriteMealEntity(
             idMeal = "1",
             strMeal = "Carbonara",
@@ -93,26 +81,18 @@ class RoomIntegrationTest {
             ingredients = emptyList(),
             addedAt = System.currentTimeMillis()
         )
-        
-        // Act - сохраняем дважды
+
         dao.insertFavourite(entity)
         dao.insertFavourite(entity.copy(addedAt = System.currentTimeMillis() + 1000))
-        
-        // Act - получаем все
+
         val allFavourites = dao.getAllFavouritesSync()
-        
-        // Assert - должно быть только одно
+
         assertEquals(1, allFavourites.size)
         assertEquals("1", allFavourites[0].idMeal)
     }
-    
-    /**
-     * Интеграционный тест 3: Удаление из избранного
-     * Удаленное блюдо не должно быть в избранном
-     */
+
     @Test
     fun testRemoveFromFavourites() = runBlocking {
-        // Arrange
         val entity = FavouriteMealEntity(
             idMeal = "1",
             strMeal = "Carbonara",
@@ -123,27 +103,20 @@ class RoomIntegrationTest {
             ingredients = emptyList(),
             addedAt = System.currentTimeMillis()
         )
-        
+
         dao.insertFavourite(entity)
-        
-        // Act
+
         val beforeDelete = dao.getAllFavouritesSync()
         assertEquals(1, beforeDelete.size)
-        
+
         dao.deleteFavourite("1")
-        
-        // Assert
+
         val afterDelete = dao.getAllFavouritesSync()
         assertTrue(afterDelete.isEmpty())
     }
-    
-    /**
-     * Нетривиальный интеграционный тест 4: Порядок избранных по времени добавления
-     * Избранные должны возвращаться в порядке добавления (новые в начале)
-     */
+
     @Test
     fun testFavouritesOrderByAddedTime() = runBlocking {
-        // Arrange
         val now = System.currentTimeMillis()
         val meal1 = FavouriteMealEntity(
             idMeal = "1",
@@ -165,16 +138,14 @@ class RoomIntegrationTest {
             ingredients = emptyList(),
             addedAt = now + 1000
         )
-        
-        // Act
+
         dao.insertFavourite(meal1)
         dao.insertFavourite(meal2)
-        
+
         val retrieved = dao.getAllFavouritesSync()
-        
-        // Assert - новое в начале
+
         assertEquals(2, retrieved.size)
-        assertEquals("2", retrieved[0].idMeal)  // Добавлено позже
+        assertEquals("2", retrieved[0].idMeal)
         assertEquals("1", retrieved[1].idMeal)
     }
 }
