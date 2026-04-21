@@ -1,13 +1,16 @@
 package com.example.cookmate.ui.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import com.example.cookmate.data.api.CategoriesResponse
+import com.example.cookmate.data.api.MealApiService
+import com.example.cookmate.data.api.MealDetailsResponse
+import com.example.cookmate.data.api.MealResponse
 import com.example.cookmate.data.model.Ingredient
 import com.example.cookmate.data.model.Meal
 import com.example.cookmate.data.repository.MealRepository
 import com.example.cookmate.data.service.FavouriteMealService
 import com.example.cookmate.ui.state.MealUiState
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +28,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
-import org.mockito.kotlin.doAnswer
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -115,7 +116,7 @@ class CookMateViewModelTest {
         advanceUntilIdle()
         assertTrue(viewModel.uiState.mealListState is MealUiState.Error)
         
-        viewModel.searchMeals("test")
+        viewModel.retrySearch()
         advanceUntilIdle()
 
         verify(mealRepository, times(2)).searchMealsByName("test")
@@ -146,30 +147,30 @@ class CookMateViewModelTest {
 
     @Test
     fun testRetryActuallyInitiatesNewRequest() = runTest {
-        whenever(mealRepository.searchMealsByName("test")).thenReturn(listOf(testMeal))
+        whenever(mealRepository.searchMealsByName("test"))
+            .thenThrow(RuntimeException("Network error"))
+            .thenReturn(listOf(testMeal))
         
         viewModel.searchMeals("test")
         advanceUntilIdle()
-        viewModel.searchMeals("test")
+        assertTrue(viewModel.uiState.mealListState is MealUiState.Error)
+
+        viewModel.retrySearch()
         advanceUntilIdle()
         
         verify(mealRepository, times(2)).searchMealsByName("test")
+        assertTrue(viewModel.uiState.mealListState is MealUiState.Success)
     }
 
     @Test
     fun testCancelOldRequest() = runTest {
         val slowMeal = testMeal.copy(idMeal = "1", strMeal = "Slow Meal")
         val fastMeal = testMeal.copy(idMeal = "2", strMeal = "Fast Meal")
-
-        doAnswer {
-            runBlocking {
-                delay(200)
-                listOf(slowMeal)
-            }
-        }.whenever(mealRepository).searchMealsByName(eq("slow"))
-        whenever(mealRepository.searchMealsByName("fast")).thenReturn(listOf(fastMeal))
+        val repository = CancellableSearchRepository(slowMeal, fastMeal)
+        val viewModel = CookMateViewModel(repository, favouriteService)
 
         viewModel.searchMeals("slow")
+        assertIs<MealUiState.Loading>(viewModel.uiState.mealListState)
         advanceTimeBy(50)
         viewModel.searchMeals("fast")
         advanceUntilIdle()
@@ -177,8 +178,12 @@ class CookMateViewModelTest {
         val state = viewModel.uiState.mealListState
         assertIs<MealUiState.Success>(state)
         assertEquals("2", state.meals.first().idMeal)
-        verify(mealRepository, times(1)).searchMealsByName("slow")
-        verify(mealRepository, times(1)).searchMealsByName("fast")
+        advanceTimeBy(300)
+        val stateAfterOldRequestTime = viewModel.uiState.mealListState
+        assertIs<MealUiState.Success>(stateAfterOldRequestTime)
+        assertEquals("2", stateAfterOldRequestTime.meals.first().idMeal)
+        assertEquals(1, repository.slowRequests)
+        assertEquals(1, repository.fastRequests)
     }
 
     @Test
@@ -193,5 +198,35 @@ class CookMateViewModelTest {
         favoritesFlow.value = listOf(m1, m2)
         advanceUntilIdle()
         assertEquals(2, viewModel.uiState.favoriteMeals.size)
+    }
+
+    private class CancellableSearchRepository(
+        private val slowMeal: Meal,
+        private val fastMeal: Meal
+    ) : MealRepository(DummyMealApiService) {
+        var slowRequests = 0
+        var fastRequests = 0
+
+        override suspend fun searchMealsByName(name: String): List<Meal> {
+            return when (name) {
+                "slow" -> {
+                    slowRequests++
+                    delay(200)
+                    listOf(slowMeal)
+                }
+                "fast" -> {
+                    fastRequests++
+                    listOf(fastMeal)
+                }
+                else -> emptyList()
+            }
+        }
+    }
+
+    private object DummyMealApiService : MealApiService {
+        override suspend fun searchMealsByName(name: String): MealResponse = MealResponse(null)
+        override suspend fun getMealDetails(id: String): MealDetailsResponse = MealDetailsResponse(null)
+        override suspend fun getCategories(): CategoriesResponse = CategoriesResponse(emptyList())
+        override suspend fun getMealsByCategory(category: String): MealResponse = MealResponse(null)
     }
 }

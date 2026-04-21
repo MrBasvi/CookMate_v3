@@ -144,7 +144,7 @@ fun SearchScreen(
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                             Button(
-                                onClick = { viewModel.searchMeals(uiState.searchQuery) },
+                                onClick = { viewModel.retrySearch() },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.error
                                 )

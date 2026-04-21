@@ -26,6 +26,9 @@ open class FavouriteMealService @Inject constructor(
     
     suspend fun isFavourite(idMeal: String): Boolean =
         favouriteMealDao.getFavourite(idMeal) != null
+
+    suspend fun getFavourite(mealId: String): Meal? =
+        favouriteMealDao.getFavourite(mealId)?.toMeal()
     
     suspend fun addFavourite(meal: Meal) {
         val localImageUri = saveMealImageLocally(meal.idMeal, meal.strMealThumb)

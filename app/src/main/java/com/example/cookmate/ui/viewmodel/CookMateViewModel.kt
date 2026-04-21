@@ -26,6 +26,7 @@ class CookMateViewModel @Inject constructor(
         private set
 
     private var searchJob: Job? = null
+    private var lastSearchQuery: String = ""
 
     init {
         observeFavourites()
@@ -52,19 +53,20 @@ class CookMateViewModel @Inject constructor(
     }
 
     fun searchMeals(query: String) {
-        if (query.isBlank()) {
+        val trimmedQuery = query.trim()
+        if (trimmedQuery.isBlank()) {
             uiState = uiState.copy(mealListState = MealUiState.Empty)
             return
         }
 
-        // ТЗ: Отмена устаревшего запроса (нетривиальное поведение)
+        lastSearchQuery = trimmedQuery
         searchJob?.cancel()
         
         uiState = uiState.copy(mealListState = MealUiState.Loading)
 
         searchJob = viewModelScope.launch {
             try {
-                val meals = repository.searchMealsByName(query)
+                val meals = repository.searchMealsByName(trimmedQuery)
                 
                 if (meals.isEmpty()) {
                     uiState = uiState.copy(mealListState = MealUiState.Empty)
@@ -85,6 +87,10 @@ class CookMateViewModel @Inject constructor(
         }
     }
 
+    fun retrySearch() {
+        searchMeals(lastSearchQuery.ifBlank { uiState.searchQuery })
+    }
+
     fun getMealDetails(mealId: String) {
         uiState = uiState.copy(
             selectedMealId = mealId,
@@ -93,12 +99,8 @@ class CookMateViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val favouriteMeal = uiState.favoriteMeals.firstOrNull {
-                    it.idMeal == mealId &&
-                    it.ingredients.isNotEmpty()
-                }
-
-                if (favouriteMeal != null) {
+                val favouriteMeal = getStoredFavouriteMeal(mealId)
+                if (favouriteMeal?.ingredients?.isNotEmpty() == true) {
                     uiState = uiState.copy(
                         mealDetailState = MealDetailUiState.Success(favouriteMeal),
                         allMeals = (uiState.allMeals + favouriteMeal).distinctBy { it.idMeal }
@@ -116,10 +118,12 @@ class CookMateViewModel @Inject constructor(
                     allMeals = (uiState.allMeals + meal).distinctBy { it.idMeal }
                 )
             } catch (e: Exception) {
-                val cachedMeal = uiState.allMeals.firstOrNull { it.idMeal == mealId }
+                val cachedMeal = getStoredFavouriteMeal(mealId)
+                    ?: uiState.allMeals.firstOrNull { it.idMeal == mealId }
                 if (cachedMeal != null) {
                     uiState = uiState.copy(
-                        mealDetailState = MealDetailUiState.Success(cachedMeal)
+                        mealDetailState = MealDetailUiState.Success(cachedMeal),
+                        allMeals = (uiState.allMeals + cachedMeal).distinctBy { it.idMeal }
                     )
                 } else {
                     uiState = uiState.copy(
@@ -129,6 +133,10 @@ class CookMateViewModel @Inject constructor(
             }
         }
     }
+
+    private suspend fun getStoredFavouriteMeal(mealId: String): Meal? =
+        favouriteService.getFavourite(mealId)
+            ?: uiState.favoriteMeals.firstOrNull { it.idMeal == mealId }
 
     fun toggleFavorite(mealId: String) {
         viewModelScope.launch {

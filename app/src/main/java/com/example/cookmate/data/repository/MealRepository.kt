@@ -4,27 +4,38 @@ import com.example.cookmate.data.api.MealApiService
 import com.example.cookmate.data.api.RemoteMeal
 import com.example.cookmate.data.model.Ingredient
 import com.example.cookmate.data.model.Meal
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 
-class MealRepository @Inject constructor(
+open class MealRepository @Inject constructor(
     private val apiService: MealApiService
 ) {
     
-    suspend fun searchMealsByName(name: String): List<Meal> {
+    open suspend fun searchMealsByName(name: String): List<Meal> {
         return try {
             val response = apiService.searchMealsByName(name)
             response.meals?.map { it.toMeal() } ?: emptyList()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw Exception("Ошибка поиска: ${e.localizedMessage}")
         }
     }
+
+    open fun searchMealsByNameFlow(name: String): Flow<List<Meal>> = flow {
+        emit(searchMealsByName(name))
+    }
     
-    suspend fun getMealDetails(mealId: String): Meal {
+    open suspend fun getMealDetails(mealId: String): Meal {
         return try {
             val response = apiService.getMealDetails(mealId)
             val remoteMeal = response.meals?.firstOrNull()
                 ?: throw Exception("Рецепт не найден")
             remoteMeal.toMeal()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw Exception("Ошибка загрузки: ${e.localizedMessage}")
         }

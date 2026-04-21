@@ -16,9 +16,6 @@
       <SelectionState runConfigName="Tests in 'com.example.cookmate'">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="DataLayerIntegrationTest">
-        <option name="selectionMode" value="DROPDOWN" />
-      </SelectionState>
     </selectionStates>
   </component>
 </project>

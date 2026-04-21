@@ -1,4 +1,4 @@
-package com.example.cookmate.ui.integration
+package com.example.cookmate.ui.contract
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.example.cookmate.data.model.Ingredient
@@ -18,7 +18,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -115,7 +114,7 @@ class ViewModelContractTest {
         advanceUntilIdle()
         assertIs<MealUiState.Error>(viewModel.uiState.mealListState)
 
-        viewModel.searchMeals(query)
+        viewModel.retrySearch()
         advanceUntilIdle()
 
         verify(mealRepository, times(2)).searchMealsByName(query)
